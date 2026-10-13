@@ -61,8 +61,11 @@ export async function sendHeartbeat(sessionId: Hex, viewer: Address, amount: big
   return json;
 }
 
-export async function endSession(sessionId: Hex): Promise<{ charged: bigint; link?: string }> {
-  const { status, json } = await post("/api/session/end", { sessionId });
+export async function endSession(
+  sessionId: Hex,
+  watchedSeconds: number,
+): Promise<{ charged: bigint; link?: string }> {
+  const { status, json } = await post("/api/session/end", { sessionId, watchedSeconds });
   if (status !== 200) throw new Error(`ending session failed with ${status}`);
   return { charged: BigInt(json.charged ?? "0"), link: json.link };
 }
@@ -72,8 +75,8 @@ export async function endSession(sessionId: Hex): Promise<{ charged: bigint; lin
  * It's sent as text/plain because that is the only type a beacon can send
  * to another origin without a CORS preflight; the backend parses it as JSON.
  */
-export function endSessionOnUnload(sessionId: Hex) {
-  navigator.sendBeacon(`${BACKEND_URL}/api/session/end`, JSON.stringify({ sessionId }));
+export function endSessionOnUnload(sessionId: Hex, watchedSeconds: number) {
+  navigator.sendBeacon(`${BACKEND_URL}/api/session/end`, JSON.stringify({ sessionId, watchedSeconds }));
 }
 
 export function formatWatched(seconds: number): string {

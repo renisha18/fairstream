@@ -36,6 +36,9 @@ export function Header() {
           FairStream
         </Link>
         <div className="flex items-center gap-3">
+          <Link href="/account" className="text-sm underline-offset-4 hover:underline">
+            Account
+          </Link>
           <span className="text-sm text-zinc-600 dark:text-zinc-400">
             {adding ? "Adding funds…" : `Balance ${balance === null ? "…" : formatDollars(balance)}`}
           </span>

@@ -184,8 +184,38 @@ app.post("/api/session/end", async (req, res) => {
   }
   if (s.status === "settling") return res.status(409).json({ error: "settlement already in progress" });
 
+  // Only for the viewing history; billing always uses the signed receipts.
+  const watched = req.body?.watchedSeconds;
+  if (typeof watched === "number" && Number.isFinite(watched) && watched >= 0) {
+    s.watchedSeconds = Math.min(Math.floor(watched), 24 * 60 * 60);
+  }
+
   const result = await settleSession(s);
   res.json({ ...result, link: result.txHash && txLink(result.txHash) });
+});
+
+// Past viewings for the account page, newest first.
+app.get("/api/sessions/:viewer", (req, res) => {
+  const viewer = req.params.viewer;
+  if (!isAddress(viewer)) return badRequest(res, "invalid viewer address");
+
+  const sessions = Object.values(store.sessions)
+    .filter((s) => s.viewer.toLowerCase() === viewer.toLowerCase())
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .map((s) => {
+      const billed = s.latest ? BigInt(s.latest.amount) : 0n;
+      return {
+        sessionId: s.id,
+        videoId: s.videoId,
+        startedAt: s.startedAt,
+        status: s.status,
+        // Sessions the player didn't report (e.g. auto-settled) fall back to the billed time.
+        watchedSeconds: s.watchedSeconds ?? Number((billed / PRICE_STEP) * BigInt(STEP_SECONDS)),
+        charged: s.charged ?? null,
+        link: s.settleTx ? txLink(s.settleTx) : null,
+      };
+    });
+  res.json({ sessions });
 });
 
 // 5. Balance and this period's spend for the account screen.

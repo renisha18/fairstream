@@ -16,6 +16,8 @@ export type Session = {
   settleTx?: Hash;
   charged?: string;
   error?: string;
+  /** Seconds actually played, as reported by the player when it ended the session. */
+  watchedSeconds?: number;
 };
 
 export type Onboarding = { gasTx?: Hash; mintTx?: Hash; done: boolean };

@@ -71,3 +71,45 @@ export function addFunds(viewer: Address, meterKey: Address) {
     });
   });
 }
+
+export const WITHDRAW_DELAY_SECONDS = 120; // must match FairStream.WITHDRAW_DELAY
+
+/** Step 1: tell FairStream you want your balance back. Starts the 2-minute wait. */
+export function requestWithdrawal(viewer: Address) {
+  return withWallet(viewer, (account) =>
+    send(account, {
+      address: fairStream.address,
+      abi: fairStream.abi,
+      functionName: "requestWithdraw",
+      args: [],
+    }),
+  );
+}
+
+/** Step 2, after the wait: FairStream returns the whole balance to account 0. */
+export function completeWithdrawal(viewer: Address) {
+  return withWallet(viewer, (account) =>
+    send(account, {
+      address: fairStream.address,
+      abi: fairStream.abi,
+      functionName: "withdraw",
+      args: [],
+    }),
+  );
+}
+
+export type Viewing = {
+  sessionId: string;
+  videoId: string;
+  startedAt: number;
+  status: "open" | "settling" | "settled" | "closed" | "failed";
+  watchedSeconds: number;
+  charged: bigint | null;
+  link: string | null;
+};
+
+export async function getViewings(viewer: Address): Promise<Viewing[]> {
+  type Raw = Omit<Viewing, "charged"> & { charged: string | null };
+  const { sessions } = await backend<{ sessions: Raw[] }>(`/api/sessions/${viewer}`);
+  return sessions.map((s) => ({ ...s, charged: s.charged === null ? null : BigInt(s.charged) }));
+}

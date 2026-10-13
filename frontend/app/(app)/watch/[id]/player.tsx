@@ -202,7 +202,7 @@ export function Player({ video }: { video: Video }) {
       result = { watchedSeconds, paid: earlierPaidRef.current };
     } else {
       try {
-        const ended = await endSession(sessionId);
+        const ended = await endSession(sessionId, watchedRef.current - sessionBaseRef.current);
         result = { watchedSeconds, paid: earlierPaidRef.current + ended.charged, link: ended.link };
       } catch {
         // The backend settles idle sessions by itself, so show what it will charge.
@@ -246,7 +246,7 @@ export function Player({ video }: { video: Video }) {
   // Closing the tab: a beacon still reaches the backend after the page is gone.
   const onPageHide = useEffectEvent(() => {
     if (phaseRef.current === "watching" && sessionIdRef.current) {
-      endSessionOnUnload(sessionIdRef.current);
+      endSessionOnUnload(sessionIdRef.current, watchedRef.current - sessionBaseRef.current);
     }
   });
   useEffect(() => {
