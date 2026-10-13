@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.local
+.env.*
+!.env.example
+
+# dependencies
+node_modules
+
+# foundry build output
+out/
+cache/
+broadcast/
+
+# macOS
+.DS_Store
+CLAUDE.md
