@@ -11,9 +11,11 @@ type Deployments = {
   contracts: { MockUSDC: Deployment; FairStream: Deployment };
 };
 
-const deployments: Deployments = JSON.parse(
-  readFileSync(new URL("../../shared/deployments.json", import.meta.url), "utf8"),
-);
+// Resolved from this file, so it works from src/ (tsx) and dist/ (compiled) alike.
+// DEPLOYMENTS_PATH overrides it when the backend is deployed without the shared/ folder.
+const deploymentsPath =
+  process.env.DEPLOYMENTS_PATH ?? new URL("../../shared/deployments.json", import.meta.url);
+const deployments: Deployments = JSON.parse(readFileSync(deploymentsPath, "utf8"));
 
 export const CHAIN_ID = deployments.chainId;
 export const EXPLORER = deployments.explorer;

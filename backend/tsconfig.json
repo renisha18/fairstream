@@ -5,8 +5,12 @@
     "moduleResolution": "nodenext",
     "strict": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    // src/x.ts compiles to dist/x.js, one level below backend/ just like src/,
+    // so relative paths to ../../shared and ../data work in both.
+    "rootDir": "src",
+    "outDir": "dist",
+    "sourceMap": true
   },
-  "include": ["src", "scripts"]
+  "include": ["src"]
 }

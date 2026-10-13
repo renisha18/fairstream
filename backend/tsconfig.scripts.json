@@ -1,0 +1,9 @@
+{
+  // Type-checks the tsx-run scripts (e.g. simulate.ts) together with src; emits nothing.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src", "scripts"]
+}

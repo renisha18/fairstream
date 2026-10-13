@@ -1,6 +1,4 @@
-// Plain text wordmark.
+// FairStream wordmark, set in Sancreek.
 export function Logo({ size = "md" }: { size?: "md" | "lg" }) {
-  return (
-    <span className={`font-semibold tracking-tight ${size === "lg" ? "text-[32px]" : "text-lg"}`}>FairStream</span>
-  );
+  return <span className={`wordmark ${size === "lg" ? "text-[64px]" : "text-[28px]"}`}>FairStream</span>;
 }

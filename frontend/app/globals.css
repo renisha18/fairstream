@@ -10,8 +10,9 @@
   --color-muted: #a1a1aa;
   --color-faint: #71717a;
   --color-money: #22c55e; /* live meter, cap progress, "free after the cap" only */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-instrument-serif); /* large titles only */
+  --font-wordmark: var(--font-sancreek); /* the FairStream wordmark only */
 }
 
 :root {
@@ -68,11 +69,22 @@ body {
   }
 }
 
+/* Large page and hero titles in Instrument Serif (regular only; it has no bold). */
 @utility page-title {
-  font-size: 28px;
-  line-height: 1.2;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+/* Set in capitals, like the wood-type alphabet it's modelled on. */
+@utility wordmark {
+  font-family: var(--font-wordmark), Georgia, serif;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1;
 }
 
 @utility section-title {
