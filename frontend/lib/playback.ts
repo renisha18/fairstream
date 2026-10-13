@@ -6,6 +6,9 @@ import { meterAccount } from "./passkey";
 
 export const PRICE_STEP = 10_000n; // $0.01
 export const STEP_SECONDS = 10;
+// The first 30 seconds of every viewing are free: billing starts after them, so the first
+// receipt is for 30s preview + 10s = 40 seconds of playback. Must match the backend.
+export const FREE_PREVIEW_SECONDS = 30;
 export const PRICE_PER_MINUTE = (PRICE_STEP * 60n) / BigInt(STEP_SECONDS); // $0.06
 
 export type Summary = { watchedSeconds: number; paid: bigint; link?: string };
@@ -92,9 +95,13 @@ export const MONTHLY_PLAN_PRICE = 7_990_000n;
 const CENT = 10_000n;
 const PRICE_PER_SECOND = PRICE_STEP / BigInt(STEP_SECONDS); // $0.001
 
-/** Most a full watch can cost: length × $0.001, rounded up to the cent, never above what's left of the cap. */
+/**
+ * Most a full watch can cost: (length − free preview) × $0.001, rounded up to the cent,
+ * never above what's left of the cap.
+ */
 export function fullFilmPrice(durationSeconds: number, capLeft?: bigint): bigint {
-  const raw = BigInt(Math.ceil(durationSeconds)) * PRICE_PER_SECOND;
+  const billable = Math.max(0, Math.ceil(durationSeconds) - FREE_PREVIEW_SECONDS);
+  const raw = BigInt(billable) * PRICE_PER_SECOND;
   const rounded = ((raw + CENT - 1n) / CENT) * CENT;
   return capLeft !== undefined && capLeft < rounded ? capLeft : rounded;
 }

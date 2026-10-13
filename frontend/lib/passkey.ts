@@ -1,6 +1,6 @@
 // Passkey login and the two accounts derived from it.
-// Keys live only in this module's memory. localStorage holds just the passkey's ID,
-// which lets the browser find the same passkey again and contains no key material.
+// Keys live only in this module's memory. localStorage holds just the passkey's ID as a
+// hint for the browser; it contains no key material.
 import {
   createPasskeyWithPrfOutput,
   createSecp256k1SigningSession,
@@ -46,39 +46,39 @@ function openSession(prfOutput: Uint8Array, index: number): Secp256k1SigningSess
   }
 }
 
+// The passkey's domain ("relying party ID"). Accounts are tied to it: the same passkey on the same
+// domain always gives the same accounts, on any device the passkey syncs to (iCloud Keychain,
+// Google Password Manager, 1Password). Set NEXT_PUBLIC_RP_ID to the production domain when
+// deploying so it never depends on which host name the page happened to be opened under.
+function rpId(): string {
+  return process.env.NEXT_PUBLIC_RP_ID || location.hostname;
+}
+
+// The saved passkey ID is only a hint: it points the browser straight at the passkey used
+// last time on this device. Nothing secret is in it, and signing in works without it.
 function storedCredential() {
-  const stored = localStorage.getItem(CREDENTIAL_KEY);
-  return stored ? JSON.parse(stored) : undefined;
+  try {
+    const stored = localStorage.getItem(CREDENTIAL_KEY);
+    return stored ? JSON.parse(stored) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
-async function passkeyPrfOutput(): Promise<{ prfOutput: Uint8Array; isNew: boolean }> {
+function rememberCredential(credentialId: string, transports?: readonly string[]) {
   const known = storedCredential();
-
-  if (!known) {
-    const created = await createPasskeyWithPrfOutput({
-      rp: { id: location.hostname, name: "FairStream" },
-      user: { name: "FairStream viewer", displayName: "FairStream viewer" },
-    });
-    localStorage.setItem(
-      CREDENTIAL_KEY,
-      JSON.stringify({ credentialId: created.credentialId, transports: created.transports }),
-    );
-    return { prfOutput: created.prfOutput, isNew: true };
-  }
-
-  const { prfOutput, credentialId } = await getPasskeyPrfOutput({
-    rpId: location.hostname,
-    credential: known,
-  });
-  if (known.credentialId !== credentialId) {
-    localStorage.setItem(CREDENTIAL_KEY, JSON.stringify({ credentialId }));
-  }
-  return { prfOutput, isNew: false };
+  // Keep the saved transports if it's the same passkey; they help the browser find it faster.
+  const next = known?.credentialId === credentialId ? known : { credentialId, transports };
+  localStorage.setItem(CREDENTIAL_KEY, JSON.stringify(next));
 }
 
-/** "Continue with passkey": creates or unlocks the passkey and opens the meter session. */
-export async function continueWithPasskey(): Promise<Identity> {
-  const { prfOutput, isNew } = await passkeyPrfOutput();
+/** True when this browser has signed in before, so a reload can offer "Welcome back". */
+export function hasSavedPasskey(): boolean {
+  return storedCredential() !== undefined;
+}
+
+// Turns the passkey's secret bytes into the two accounts and opens the meter session.
+function openIdentity(prfOutput: Uint8Array, isNew: boolean): Identity {
   try {
     // Only the address of account 0 is kept; its session ends immediately.
     const wallet = openSession(prfOutput, WALLET_INDEX);
@@ -91,6 +91,40 @@ export async function continueWithPasskey(): Promise<Identity> {
   } finally {
     prfOutput.fill(0);
   }
+}
+
+/** "Create account": makes a new passkey, which means a new, empty account. */
+export async function createAccount(): Promise<Identity> {
+  const created = await createPasskeyWithPrfOutput({
+    rp: { id: rpId(), name: "FairStream" },
+    // The date tells passkeys apart in the browser's list if someone makes more than one.
+    user: {
+      name: `FairStream · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`,
+      displayName: "FairStream account",
+    },
+  });
+  rememberCredential(created.credentialId, created.transports);
+  return openIdentity(created.prfOutput, true);
+}
+
+/**
+ * "Sign in": no credential ID is passed, so the browser lists every FairStream passkey it can
+ * reach, including ones synced from another device.
+ */
+export async function signIn(): Promise<Identity> {
+  const { prfOutput, credentialId } = await getPasskeyPrfOutput({ rpId: rpId() });
+  rememberCredential(credentialId);
+  return openIdentity(prfOutput, false);
+}
+
+/** After a reload: one prompt, aimed at the passkey used last time if we have the hint. */
+export async function unlock(): Promise<Identity> {
+  const { prfOutput, credentialId } = await getPasskeyPrfOutput({
+    rpId: rpId(),
+    credential: storedCredential(),
+  });
+  rememberCredential(credentialId);
+  return openIdentity(prfOutput, false);
 }
 
 /** The always-on meter key, for signing receipts. */
@@ -108,7 +142,7 @@ export async function withWallet<T>(
   job: (account: LocalAccount) => Promise<T>,
 ): Promise<T> {
   const { prfOutput } = await getPasskeyPrfOutput({
-    rpId: location.hostname,
+    rpId: rpId(),
     credential: storedCredential(),
   });
   let session: Secp256k1SigningSession;

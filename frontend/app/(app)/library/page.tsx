@@ -116,6 +116,7 @@ export default function LibraryPage() {
                     <p className="text-xs text-muted tabular-nums">
                       {formatLength(video.duration)} · {PER_MINUTE}
                     </p>
+                    <p className="text-xs text-money">First 30 seconds free</p>
                     <p className="text-xs text-muted">
                       Full film: up to{" "}
                       <span className="text-fg tabular-nums">
@@ -137,7 +138,7 @@ export default function LibraryPage() {
       {/* Right panel */}
       <aside className="flex shrink-0 flex-col gap-6 xl:w-72">
         <div className="panel space-y-3 p-4">
-          <h2 className="font-semibold">This month</h2>
+          <h2 className="font-semibold">This period</h2>
           {account ? (
             <CapProgress spent={account.monthlySpent} cap={account.monthlyCap} />
           ) : (

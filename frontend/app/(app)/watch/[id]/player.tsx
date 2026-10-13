@@ -8,6 +8,7 @@ import { formatDollars, getAccount } from "@/lib/account";
 import {
   endSession,
   endSessionOnUnload,
+  FREE_PREVIEW_SECONDS,
   fullFilmPrice,
   PRICE_STEP,
   sendHeartbeat,
@@ -15,6 +16,7 @@ import {
   STEP_SECONDS,
   type Summary,
 } from "@/lib/playback";
+import { formatResetDay, usePeriodEnd } from "@/lib/period";
 import type { Video } from "@/lib/videos";
 import { useSession } from "../../../session";
 import { SummaryLine } from "../../summary";
@@ -38,6 +40,7 @@ export function Player({ video }: { video: Video }) {
   const sessionIdRef = useRef<Hex | null>(null);
   const startingRef = useRef(false);
   const sessionBaseRef = useRef(0); // watchedRef value when the current session began billing
+  const sessionStartedAtRef = useRef(0); // Date.now() when the backend opened the current session
   const stepsSentRef = useRef(0); // receipts the backend accepted in the current session
   const earlierPaidRef = useRef(0n); // charged by sessions the backend closed on its own
   const busyRef = useRef(false); // a heartbeat is in flight
@@ -46,9 +49,12 @@ export function Player({ video }: { video: Video }) {
   // Display state, copied from the refs once a second.
   const [phase, setPhase] = useState<Phase>("ready");
   const [thisVideo, setThisVideo] = useState(0n);
+  const [previewLeft, setPreviewLeft] = useState(FREE_PREVIEW_SECONDS);
   const [month, setMonth] = useState<{ spent: bigint; cap: bigint } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const periodEnd = usePeriodEnd();
+  const untilReset = periodEnd ? `until ${formatResetDay(periodEnd)}` : "this period";
 
   // Display only: the cost pill behaves like player controls. Hidden while the film plays,
   // shown when paused or for 3 seconds after the pointer moves over the player.
@@ -108,6 +114,7 @@ export function Player({ video }: { video: Video }) {
       const result = await startSession(viewer, video.id);
       if ("sessionId" in result) {
         sessionIdRef.current = result.sessionId;
+        sessionStartedAtRef.current = Date.now();
         stepsSentRef.current = 0;
         void pump();
       } else if (result.error === "no-balance") {
@@ -148,8 +155,19 @@ export function Player({ video }: { video: Video }) {
     busyRef.current = true;
     try {
       while (sessionIdRef.current === sessionId && !stoppedRef.current) {
-        const due = Math.floor((watchedRef.current - sessionBaseRef.current) / STEP_SECONDS);
+        // Billing only counts playback after the free preview.
+        const billable = (t: number) => Math.max(0, t - FREE_PREVIEW_SECONDS);
+        const due = Math.floor((billable(watchedRef.current) - billable(sessionBaseRef.current)) / STEP_SECONDS);
         if (due <= stepsSentRef.current) break;
+        // The backend times sessions by the clock, not playback, and refuses a first receipt
+        // sooner than 40 seconds after the session opened. Playback can run faster than the
+        // clock (e.g. 2x speed), so wait for the clock too; later steps then follow in order.
+        if (
+          stepsSentRef.current === 0 &&
+          Date.now() - sessionStartedAtRef.current < (FREE_PREVIEW_SECONDS + STEP_SECONDS) * 1000
+        ) {
+          break;
+        }
 
         const amount = BigInt(stepsSentRef.current + 1) * PRICE_STEP;
         const reply = await sendHeartbeat(sessionId, viewer, amount);
@@ -176,6 +194,7 @@ export function Player({ video }: { video: Video }) {
       phaseRef.current = "watching";
       setPhase("watching");
       watchedRef.current = 0;
+      setPreviewLeft(FREE_PREVIEW_SECONDS);
       sessionBaseRef.current = 0;
       stepsSentRef.current = 0;
       earlierPaidRef.current = 0n;
@@ -245,7 +264,10 @@ export function Player({ video }: { video: Video }) {
 
   // Live meter: refresh the overlay numbers every second.
   useEffect(() => {
-    const id = setInterval(() => setThisVideo(billedSoFar()), 1000);
+    const id = setInterval(() => {
+      setThisVideo(billedSoFar());
+      setPreviewLeft(Math.max(0, Math.ceil(FREE_PREVIEW_SECONDS - watchedRef.current)));
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -303,7 +325,7 @@ export function Player({ video }: { video: Video }) {
   const videoCost = thisVideo < capLeft ? thisVideo : capLeft;
   const monthTotal = spent + videoCost;
   const capReached = month !== null && monthTotal >= cap;
-  // After "Done" the month total already includes this video, so compare it directly.
+  // After "Done" the period total already includes this video, so compare it directly.
   const capReachedAfter = month !== null && month.spent >= month.cap;
   const meterVisible = paused || pointerActive;
 
@@ -346,7 +368,7 @@ export function Player({ video }: { video: Video }) {
         />
         {phase === "ready" && (
           <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted">
-            Full film: up to{" "}
+            <span className="text-money">First 30 seconds free</span> · Full film: up to{" "}
             <span className="text-fg tabular-nums">
               {formatDollars(fullFilmPrice(video.duration, month ? capLeft : undefined))}
             </span>
@@ -360,9 +382,13 @@ export function Player({ video }: { video: Video }) {
             }`}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-money" />
-            <span className="text-money">{formatDollars(videoCost)} this video</span>
+            {previewLeft > 0 ? (
+              <span className="text-money">Free preview · {previewLeft}s left</span>
+            ) : (
+              <span className="text-money">{formatDollars(videoCost)} this video</span>
+            )}
             <span className="text-muted">
-              · {formatDollars(monthTotal)} of {formatDollars(cap)} this month
+              · {formatDollars(monthTotal)} of {formatDollars(cap)} {untilReset}
             </span>
           </div>
         )}
@@ -370,7 +396,10 @@ export function Player({ video }: { video: Video }) {
 
       {notice && <p className="panel px-4 py-3">{notice}</p>}
       {capReached && phase !== "ended" && (
-        <p className="panel px-4 py-3 text-money">You’ve reached this month’s cap. Everything else this month is free.</p>
+        <p className="panel px-4 py-3 text-money">
+          You’ve reached this period’s cap. Everything else is free{" "}
+          {periodEnd ? `until ${formatResetDay(periodEnd)}` : "for the rest of this period"}.
+        </p>
       )}
       {phase === "ended" && (
         <div className="panel space-y-1 px-4 py-4">

@@ -24,6 +24,9 @@ export const fairStream = deployments.contracts.FairStream;
 // $0.01 (6 decimals) per 10 seconds of playback.
 export const PRICE_STEP = 10_000n;
 export const STEP_SECONDS = 10;
+// First 30 seconds of every viewing are free, so the first receipt (10 billable seconds)
+// is expected after 40 seconds of playback. Must match the frontend.
+export const FREE_PREVIEW_SECONDS = 30;
 
 // Must match the contract: EIP712("FairStream", "1") and RECEIPT_TYPEHASH.
 export const receiptDomain = {

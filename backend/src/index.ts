@@ -6,6 +6,7 @@ import { isAddress, isHex, parseEther, toHex, verifyTypedData, type Address, typ
 import { readContract, relayerAddress, sendNative, writeContract } from "./chain.js";
 import {
   fairStream,
+  FREE_PREVIEW_SECONDS,
   PRICE_STEP,
   receiptDomain,
   receiptTypes,
@@ -20,6 +21,9 @@ const ONBOARD_GAS = parseEther("0.05");
 const ONBOARD_USDC = 10_000_000n; // 10 USDC
 const IDLE_MS = 60_000;
 const SWEEP_MS = 30_000;
+// Network delay between the player and us, so an honest first receipt is never refused.
+const CLOCK_SLACK_MS = 2_000;
+const FIRST_RECEIPT_MS = (FREE_PREVIEW_SECONDS + STEP_SECONDS) * 1000;
 
 const app = express();
 app.use(cors({ origin: "http://localhost:3000" }));
@@ -130,6 +134,7 @@ app.post("/api/session/start", async (req, res) => {
     sessionId: id,
     pricePerStep: PRICE_STEP.toString(),
     stepSeconds: STEP_SECONDS,
+    freePreviewSeconds: FREE_PREVIEW_SECONDS,
     balance: balance.toString(),
   });
 });
@@ -164,6 +169,11 @@ app.post("/api/heartbeat", async (req, res) => {
   const last = s.latest ? BigInt(s.latest.amount) : 0n;
   if (amount < last) return res.json({ stop: true, reason: "amount lower than previous receipt" });
   if (amount > last + PRICE_STEP) return res.json({ stop: true, reason: "amount jumped more than one step" });
+  // Free preview: nothing can be charged until 30s preview + one 10s step could have played.
+  // We only see the clock, and playback can't get ahead of it, so this is a safe lower bound.
+  if (!s.latest && amount > 0n && Date.now() - s.startedAt < FIRST_RECEIPT_MS - CLOCK_SLACK_MS) {
+    return res.json({ stop: true, reason: "first receipt before the free preview ended" });
+  }
   if (amount > balance) return res.json({ stop: true, reason: "insufficient balance" });
   // The session may have been ended or auto-settled while we were checking.
   if (s.status !== "open") return res.json({ stop: true, reason: `session is ${s.status}` });

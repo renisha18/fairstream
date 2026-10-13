@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import {
   completeWithdrawal,
   formatDollars,
@@ -96,6 +97,9 @@ export default function AccountPage() {
     return error ? <p className="text-muted">{error}</p> : <p className="text-faint">Loading…</p>;
   }
 
+  // Viewings that were settled on chain, so each has a payment to show on the explorer.
+  const receipts = viewings?.filter((v) => v.status === "settled" && v.link);
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <h1 className="page-title">Account</h1>
@@ -109,7 +113,7 @@ export default function AccountPage() {
         </section>
 
         <section className="panel space-y-3 p-6">
-          <p className="label">This month</p>
+          <p className="label">This period</p>
           <CapProgress spent={info.monthlySpent} cap={info.monthlyCap} />
         </section>
       </div>
@@ -185,6 +189,36 @@ export default function AccountPage() {
               </li>
             );
           })}
+        </ul>
+      </section>
+
+      <section className="panel space-y-3 p-6">
+        <h2 className="section-title">Your receipts</h2>
+        <p className="text-muted">
+          Your device signs every charge. FairStream can’t charge more than you signed or more than the 30-day cap.
+        </p>
+        {receipts && receipts.length === 0 && <p className="text-faint">No payments yet.</p>}
+        <ul className="divide-y divide-line">
+          {receipts?.map((v) => (
+            <li key={v.sessionId} className="flex items-center justify-between gap-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{getVideo(v.videoId)?.title ?? "Video"}</p>
+                <p className="text-xs text-muted tabular-nums">{new Date(v.startedAt).toLocaleDateString()}</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <p className="tabular-nums">{formatDollars(v.charged ?? 0n)}</p>
+                <a
+                  href={v.link!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-muted underline underline-offset-4 hover:text-fg"
+                >
+                  View on explorer
+                  <ExternalLink size={14} strokeWidth={1.5} />
+                </a>
+              </div>
+            </li>
+          ))}
         </ul>
       </section>
     </div>

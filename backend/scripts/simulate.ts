@@ -71,7 +71,24 @@ async function main() {
   });
   console.log(`  sessionId: ${sessionId}`);
 
-  console.log("\n4. Heartbeats");
+  // The first 30 seconds are free; the backend refuses a first receipt sooner than 40s in.
+  console.log("\n4. Free preview");
+  const early = await api<{ ok?: true; stop?: true; reason?: string }>("/api/heartbeat", {
+    sessionId,
+    amount: PRICE_STEP.toString(),
+    signature: await meter.signTypedData({
+      domain: receiptDomain,
+      types: receiptTypes,
+      primaryType: "Receipt",
+      message: { viewer: viewer.address, sessionId, amount: PRICE_STEP },
+    }),
+  });
+  if (!early.stop) throw new Error("backend accepted a receipt during the free preview");
+  console.log(`  receipt during preview refused: ${early.reason}`);
+  console.log("  waiting 40 seconds…");
+  await sleep(40_000);
+
+  console.log("\n5. Heartbeats");
   for (let i = 1n; i <= 4n; i++) {
     const amount = PRICE_STEP * i;
     const signature = await meter.signTypedData({
@@ -90,7 +107,7 @@ async function main() {
     await sleep(1_000); // the real player waits 10 seconds
   }
 
-  console.log("\n5. End session");
+  console.log("\n6. End session");
   const end = await api<{ link?: string; charged: string }>("/api/session/end", { sessionId });
   console.log(`  charged:    ${formatUnits(BigInt(end.charged), 6)} USDC`);
   console.log(`  settlement: ${end.link ?? "(no transaction)"}`);
