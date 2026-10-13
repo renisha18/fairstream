@@ -1,0 +1,22 @@
+# One per viewer (the account that holds a FairStream balance).
+type Viewer {
+  id: ID! # lowercase address
+  address: String! # checksummed address
+  meterKey: String # latest key set with deposit(); signs playback receipts
+  totalDeposited: BigInt!
+  totalCharged: BigInt!
+  totalWithdrawn: BigInt!
+  withdrawAvailableAt: BigInt # set by WithdrawRequested, cleared by Withdrawn
+  viewings: [Viewing!]! @derivedFrom(field: "viewer")
+}
+
+# One per SessionSettled event: a viewing that was paid for on chain.
+type Viewing {
+  id: ID! # sessionId
+  viewer: Viewer!
+  sessionId: String! @index
+  requested: BigInt! # amount on the signed receipt
+  charged: BigInt! # amount actually taken (lower if capped or out of balance)
+  timestamp: Int! @index # block timestamp, seconds
+  transactionHash: String!
+}

@@ -4,6 +4,7 @@ import deployments from "../../shared/deployments.json";
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
 
+export const EXPLORER = deployments.explorer; // testnet.monadvision.com
 export const chain = monadTestnet; // chain id 10143
 export const transport = http(deployments.rpcUrl);
 export const publicClient = createPublicClient({ chain, transport });

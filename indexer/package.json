@@ -1,0 +1,26 @@
+{
+  "name": "fairstream-indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-deployment.mjs",
+    "codegen": "envio codegen",
+    "dev": "envio dev",
+    "start": "envio start",
+    "stop": "envio stop",
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "envio": "3.14.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.4"
+  }
+}

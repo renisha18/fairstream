@@ -6,12 +6,11 @@ import {
   completeWithdrawal,
   formatDollars,
   getAccount,
-  getViewings,
   requestWithdrawal,
   WITHDRAW_DELAY_SECONDS,
   type AccountInfo,
-  type Viewing,
 } from "@/lib/account";
+import { getHistory, type HistoryItem, type Totals } from "@/lib/history";
 import { friendlyError } from "@/lib/passkey";
 import { formatWatched } from "@/lib/playback";
 import { getVideo } from "@/lib/videos";
@@ -30,7 +29,9 @@ export default function AccountPage() {
   const viewer = identity?.viewer;
 
   const [info, setInfo] = useState<AccountInfo | null>(null);
-  const [viewings, setViewings] = useState<Viewing[] | null>(null);
+  const [viewings, setViewings] = useState<HistoryItem[] | null>(null);
+  const [totals, setTotals] = useState<Totals | null>(null);
+  const [historySource, setHistorySource] = useState<"indexer" | "backend" | null>(null);
   const [now, setNow] = useState<number | null>(null); // seconds, ticks while a withdrawal waits
   const [busy, setBusy] = useState<"requesting" | "completing" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -41,11 +42,13 @@ export default function AccountPage() {
   useEffect(() => {
     if (!viewer) return;
     let active = true;
-    Promise.all([getAccount(viewer), getViewings(viewer)])
-      .then(([account, list]) => {
+    Promise.all([getAccount(viewer), getHistory(viewer)])
+      .then(([account, history]) => {
         if (!active) return;
         setInfo(account);
-        setViewings(list);
+        setViewings(history.viewings);
+        setTotals(history.totals);
+        setHistorySource(history.source);
       })
       .catch(() => active && setError("Couldn't load your account. Please refresh."));
     return () => {
@@ -151,8 +154,28 @@ export default function AccountPage() {
         {error && <p className="text-muted">{error}</p>}
       </section>
 
+      {totals && (
+        <section className="panel grid grid-cols-3 gap-6 p-6">
+          {(
+            [
+              ["Added in total", totals.deposited],
+              ["Paid for viewing", totals.charged],
+              ["Withdrawn", totals.withdrawn],
+            ] as const
+          ).map(([label, amount]) => (
+            <div key={label} className="space-y-1">
+              <p className="label">{label}</p>
+              <p className="text-xl font-semibold tracking-tight tabular-nums">{formatDollars(amount)}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
       <section className="panel space-y-2 p-6">
         <h2 className="section-title">Viewing history</h2>
+        {historySource === "backend" && (
+          <p className="text-xs text-faint">Showing recent activity only. Full history is temporarily unavailable.</p>
+        )}
         {viewings && viewings.length === 0 && <p className="text-faint">Nothing watched yet.</p>}
         <ul className="divide-y divide-line">
           {viewings?.map((v) => {
@@ -166,7 +189,8 @@ export default function AccountPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{video?.title ?? "Video"}</p>
                   <p className="text-xs text-muted tabular-nums">
-                    {new Date(v.startedAt).toLocaleDateString()} · {formatWatched(v.watchedSeconds)}
+                    {new Date(v.startedAt).toLocaleDateString()}
+                    {v.watchedSeconds !== null && ` · ${formatWatched(v.watchedSeconds)}`}
                   </p>
                 </div>
                 <div className="space-y-0.5 text-right">
