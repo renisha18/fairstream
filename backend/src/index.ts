@@ -24,6 +24,19 @@ const SWEEP_MS = 30_000;
 const app = express();
 app.use(cors({ origin: "http://localhost:3000" }));
 app.use(express.json());
+// A closing tab ends its session with navigator.sendBeacon, which can only send
+// text/plain to another origin. Parse those bodies as JSON too.
+app.use(express.text({ type: "text/plain" }));
+app.use((req, _res, next) => {
+  if (typeof req.body === "string") {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch {
+      req.body = {};
+    }
+  }
+  next();
+});
 
 function fsRead<T>(functionName: string, args: readonly unknown[]) {
   return readContract<T>({ address: fairStream.address, abi: fairStream.abi, functionName, args });
