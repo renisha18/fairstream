@@ -26,7 +26,15 @@ const CLOCK_SLACK_MS = 2_000;
 const FIRST_RECEIPT_MS = (FREE_PREVIEW_SECONDS + STEP_SECONDS) * 1000;
 
 const app = express();
-app.use(cors({ origin: "http://localhost:3000" }));
+// Local dev plus every deployed frontend listed in FRONTEND_URL (comma-separated).
+const allowedOrigins = [
+  "http://localhost:3000",
+  ...(process.env.FRONTEND_URL ?? "")
+    .split(",")
+    .map((url) => url.trim().replace(/\/+$/, ""))
+    .filter(Boolean),
+];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 // A closing tab ends its session with navigator.sendBeacon, which can only send
 // text/plain to another origin. Parse those bodies as JSON too.
@@ -55,6 +63,11 @@ function parseAmount(value: unknown): bigint | null {
   if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
   return null;
 }
+
+// Uptime check for Render.
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
 
 // 1. Give a new viewer a little MON for fees and 10 test USDC. Once per address.
 const onboardingInFlight = new Set<string>();

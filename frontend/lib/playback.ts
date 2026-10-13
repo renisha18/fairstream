@@ -1,6 +1,6 @@
 // Viewing sessions: start, signed receipts every 10 seconds, end.
 import type { Address, Hex } from "viem";
-import deployments from "../../shared/deployments.json";
+import deployments from "./deployments.json";
 import { BACKEND_URL, fairStream } from "./chain";
 import { meterAccount } from "./passkey";
 

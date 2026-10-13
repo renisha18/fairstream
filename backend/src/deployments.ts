@@ -1,4 +1,5 @@
-// Contract addresses, ABIs and the receipt format, loaded from shared/deployments.json.
+// Contract addresses, ABIs and the receipt format, loaded from backend/deployments.json
+// (a copy of shared/deployments.json, refreshed by scripts/sync-deployments.mjs).
 // No secrets in here, so scripts can import it too.
 import { readFileSync } from "node:fs";
 import type { Abi, Address, Hash } from "viem";
@@ -12,9 +13,8 @@ type Deployments = {
 };
 
 // Resolved from this file, so it works from src/ (tsx) and dist/ (compiled) alike.
-// DEPLOYMENTS_PATH overrides it when the backend is deployed without the shared/ folder.
-const deploymentsPath =
-  process.env.DEPLOYMENTS_PATH ?? new URL("../../shared/deployments.json", import.meta.url);
+// DEPLOYMENTS_PATH can point somewhere else if needed.
+const deploymentsPath = process.env.DEPLOYMENTS_PATH || new URL("../deployments.json", import.meta.url);
 const deployments: Deployments = JSON.parse(readFileSync(deploymentsPath, "utf8"));
 
 export const CHAIN_ID = deployments.chainId;

@@ -46,12 +46,37 @@ function openSession(prfOutput: Uint8Array, index: number): Secp256k1SigningSess
   }
 }
 
-// The passkey's domain ("relying party ID"). Accounts are tied to it: the same passkey on the same
-// domain always gives the same accounts, on any device the passkey syncs to (iCloud Keychain,
-// Google Password Manager, 1Password). Set NEXT_PUBLIC_RP_ID to the production domain when
-// deploying so it never depends on which host name the page happened to be opened under.
+// Passkeys only exist in the browser. Every passkey call starts here, so nothing can run during
+// server rendering, and a browser without passkey support gets a clear message.
+function requirePasskeySupport() {
+  if (typeof window === "undefined") throw new Error("Passkeys can only be used in the browser.");
+  if (!window.PublicKeyCredential || !navigator.credentials) throw new PasskeyUnsupportedError();
+}
+
+class PasskeyUnsupportedError extends Error {
+  constructor() {
+    super("This browser doesn't support passkeys.");
+  }
+}
+
+// The passkey's domain ("relying party ID"), read from the page at runtime. Accounts are tied
+// to it: the same passkey on the same domain always gives the same accounts, on any device the
+// passkey syncs to (iCloud Keychain, Google Password Manager, 1Password).
+//
+// NEXT_PUBLIC_RP_ID can pin it to a parent domain (e.g. "fairstream.app" for www.fairstream.app),
+// but only if the current page is on that domain. The browser rejects any other value outright,
+// with no prompt at all, so a wrong or mistyped setting is ignored here instead.
 function rpId(): string {
-  return process.env.NEXT_PUBLIC_RP_ID || location.hostname;
+  const host = window.location.hostname;
+  const configured = process.env.NEXT_PUBLIC_RP_ID?.trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[/:].*$/, "");
+  if (configured && (host === configured || host.endsWith(`.${configured}`))) return configured;
+  if (configured) {
+    console.warn(`[passkey] NEXT_PUBLIC_RP_ID "${configured}" doesn't match this site (${host}); using ${host}.`);
+  }
+  return host;
 }
 
 // The saved passkey ID is only a hint: it points the browser straight at the passkey used
@@ -95,6 +120,7 @@ function openIdentity(prfOutput: Uint8Array, isNew: boolean): Identity {
 
 /** "Create account": makes a new passkey, which means a new, empty account. */
 export async function createAccount(): Promise<Identity> {
+  requirePasskeySupport();
   const created = await createPasskeyWithPrfOutput({
     rp: { id: rpId(), name: "FairStream" },
     // The date tells passkeys apart in the browser's list if someone makes more than one.
@@ -112,6 +138,7 @@ export async function createAccount(): Promise<Identity> {
  * reach, including ones synced from another device.
  */
 export async function signIn(): Promise<Identity> {
+  requirePasskeySupport();
   const { prfOutput, credentialId } = await getPasskeyPrfOutput({ rpId: rpId() });
   rememberCredential(credentialId);
   return openIdentity(prfOutput, false);
@@ -119,6 +146,7 @@ export async function signIn(): Promise<Identity> {
 
 /** After a reload: one prompt, aimed at the passkey used last time if we have the hint. */
 export async function unlock(): Promise<Identity> {
+  requirePasskeySupport();
   const { prfOutput, credentialId } = await getPasskeyPrfOutput({
     rpId: rpId(),
     credential: storedCredential(),
@@ -141,6 +169,7 @@ export async function withWallet<T>(
   expectedViewer: Address,
   job: (account: LocalAccount) => Promise<T>,
 ): Promise<T> {
+  requirePasskeySupport();
   const { prfOutput } = await getPasskeyPrfOutput({
     rpId: rpId(),
     credential: storedCredential(),
@@ -168,13 +197,42 @@ export function signOut() {
 }
 
 /** Plain-language message for anything thrown during login or adding funds. */
+// The browser's own reason behind a failed passkey call (a DOMException name such as
+// "NotAllowedError" or "SecurityError"), which Mera keeps as the error's cause.
+function browserReason(err: unknown): string | undefined {
+  const cause = err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined;
+  return cause instanceof Error ? cause.name : undefined;
+}
+
+/**
+ * True when the browser found no passkey to use, or the person closed the prompt. WebAuthn
+ * deliberately reports both the same way, so a site can't probe which passkeys exist.
+ */
+export function isNoPasskeyChosen(err: unknown): boolean {
+  return isMeraError(err) && err.code === "PASSKEY_OPERATION_FAILED" && browserReason(err) === "NotAllowedError";
+}
+
 export function friendlyError(err: unknown): string {
+  // Keep the technical detail in the console for debugging; the screen gets plain words.
+  console.error("[passkey]", isMeraError(err) ? err.code : "", browserReason(err) ?? "", err);
+
+  if (err instanceof PasskeyUnsupportedError) {
+    return "This browser doesn't support passkeys. Try an up-to-date Chrome, Safari or Edge.";
+  }
   if (isMeraError(err)) {
     switch (err.code) {
       case "PRF_UNAVAILABLE":
         return "This passkey can't be used with FairStream. On Chrome, save it to Google Password Manager, or use iCloud Keychain or 1Password.";
       case "PASSKEY_OPERATION_FAILED":
-        return "The passkey prompt was cancelled or didn't finish. Please try again.";
+        switch (browserReason(err)) {
+          case "SecurityError":
+            return "Passkeys aren't available at this web address. Open FairStream at its main address and try again.";
+          case "NotAllowedError":
+            return "The passkey prompt was closed or timed out. Please try again.";
+          case "NotSupportedError":
+            return "This device can't create a passkey FairStream can use. Try iCloud Keychain, Google Password Manager or 1Password.";
+        }
+        return "The passkey prompt didn't finish. Please try again.";
       case "CRYPTO_UNAVAILABLE":
         return "Please open FairStream over a secure (https) connection.";
       case "SESSION_ENDED":
@@ -184,6 +242,10 @@ export function friendlyError(err: unknown): string {
   }
   if (err instanceof Error && err.message === "That passkey belongs to a different account.") {
     return err.message;
+  }
+  // fetch() throws a TypeError when the server can't be reached (down, wrong URL, or blocked).
+  if (err instanceof TypeError) {
+    return "Couldn’t reach the FairStream server. Please try again in a moment.";
   }
   return "Something went wrong. Please try again.";
 }

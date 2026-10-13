@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { isMeraError } from "@category-labs/mera";
 import { onboard } from "@/lib/account";
-import { createAccount, friendlyError, signIn, type Identity } from "@/lib/passkey";
+import { createAccount, friendlyError, hasSavedPasskey, isNoPasskeyChosen, signIn, type Identity } from "@/lib/passkey";
 import { Logo } from "./logo";
 import { useSession } from "./session";
 
@@ -33,11 +32,11 @@ export default function LoginPage() {
       await onboard(id.viewer);
       setIdentity(id);
     } catch (err) {
-      setError(
-        next === "signin" && isMeraError(err) && err.code === "PASSKEY_OPERATION_FAILED"
-          ? "No passkey was chosen. If you’re new to FairStream, choose Create account."
-          : friendlyError(err),
-      );
+      // A browser never says whether it found no passkey or the prompt was closed. If this
+      // device has never signed in here, "no passkey" is by far the likelier reason.
+      const noAccountHere = next === "signin" && isNoPasskeyChosen(err) && !hasSavedPasskey();
+      const message = friendlyError(err); // also logs the error code to the console
+      setError(noAccountHere ? "No account on this device yet — create one first." : message);
       setMode(null);
       setStatus(null);
     }

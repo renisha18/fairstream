@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync": "node scripts/sync-deployments.mjs lib/deployments.json",
+    "prebuild": "npm run sync",
+    "predev": "npm run sync"
   },
   "dependencies": {
     "@category-labs/mera": "^0.2.0",
