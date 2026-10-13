@@ -76,7 +76,7 @@ async function passkeyPrfOutput(): Promise<{ prfOutput: Uint8Array; isNew: boole
   return { prfOutput, isNew: false };
 }
 
-/** "Continue with Face ID": creates or unlocks the passkey and opens the meter session. */
+/** "Continue with passkey": creates or unlocks the passkey and opens the meter session. */
 export async function continueWithPasskey(): Promise<Identity> {
   const { prfOutput, isNew } = await passkeyPrfOutput();
   try {
@@ -140,7 +140,7 @@ export function friendlyError(err: unknown): string {
       case "PRF_UNAVAILABLE":
         return "This passkey can't be used with FairStream. On Chrome, save it to Google Password Manager, or use iCloud Keychain or 1Password.";
       case "PASSKEY_OPERATION_FAILED":
-        return "Face ID was cancelled or didn't finish. Please try again.";
+        return "The passkey prompt was cancelled or didn't finish. Please try again.";
       case "CRYPTO_UNAVAILABLE":
         return "Please open FairStream over a secure (https) connection.";
       case "SESSION_ENDED":

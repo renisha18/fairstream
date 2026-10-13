@@ -3,9 +3,9 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "../session";
-import { Header } from "./header";
+import { Sidebar } from "./sidebar";
 
-// Wraps every signed-in page: sends signed-out visitors to the login page and shows the header.
+// Wraps every signed-in page: sends signed-out visitors to the login page and shows the sidebar.
 export default function SignedInLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { identity } = useSession();
@@ -17,9 +17,9 @@ export default function SignedInLayout({ children }: { children: ReactNode }) {
   if (!identity) return null;
 
   return (
-    <>
-      <Header />
-      <main className="mx-auto w-full max-w-4xl flex-1 p-6">{children}</main>
-    </>
+    <div className="flex w-full flex-1 flex-col lg:flex-row">
+      <Sidebar />
+      <main className="min-w-0 flex-1 p-6 lg:p-8">{children}</main>
+    </div>
   );
 }

@@ -15,6 +15,7 @@ import { friendlyError } from "@/lib/passkey";
 import { formatWatched } from "@/lib/playback";
 import { getVideo } from "@/lib/videos";
 import { useSession } from "../../session";
+import { CapProgress } from "../cap-progress";
 
 // A little slack so we don't offer the button a moment before the network agrees.
 const CLOCK_MARGIN_SECONDS = 3;
@@ -92,88 +93,98 @@ export default function AccountPage() {
   }
 
   if (!info) {
-    return error ? <p className="text-red-600">{error}</p> : <p className="text-zinc-500">Loading…</p>;
+    return error ? <p className="text-muted">{error}</p> : <p className="text-faint">Loading…</p>;
   }
 
-  const percent = info.monthlyCap > 0n ? Number((info.monthlySpent * 100n) / info.monthlyCap) : 0;
-  const capReached = info.monthlySpent >= info.monthlyCap;
-
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-semibold">Account</h1>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <h1 className="page-title">Account</h1>
 
-      <section className="space-y-3">
-        <p className="text-sm text-zinc-500">Balance</p>
-        <p className="text-4xl font-semibold">{formatDollars(info.balance)}</p>
+      <div className="grid gap-6 md:grid-cols-2">
+        <section className="panel space-y-2 p-6">
+          <p className="label">Balance</p>
+          <p className="text-[40px] font-semibold leading-none tracking-tight tabular-nums">
+            {formatDollars(info.balance)}
+          </p>
+        </section>
+
+        <section className="panel space-y-3 p-6">
+          <p className="label">This month</p>
+          <CapProgress spent={info.monthlySpent} cap={info.monthlyCap} />
+        </section>
+      </div>
+
+      <section className="panel space-y-4 p-6">
+        <h2 className="section-title">Withdraw</h2>
 
         {!pending && (
-          <button
-            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm disabled:opacity-50 dark:border-zinc-700"
-            disabled={busy !== null || info.balance === 0n}
-            onClick={() => run("requesting")}
-          >
-            {busy === "requesting" ? "Starting withdrawal…" : "Withdraw balance"}
-          </button>
+          <>
+            <p className="text-muted">Take out your whole balance. It’s ready two minutes after you ask.</p>
+            <button
+              className="btn-secondary px-4 py-2"
+              disabled={busy !== null || info.balance === 0n}
+              onClick={() => run("requesting")}
+            >
+              {busy === "requesting" ? "Starting withdrawal…" : "Withdraw balance"}
+            </button>
+          </>
         )}
 
         {pending && remaining !== null && remaining > 0 && (
-          <p className="text-sm">
-            Your withdrawal will be ready in <span className="font-mono">{formatCountdown(remaining)}</span>.
-            Playback is paused until it completes.
+          <p className="text-muted">
+            Ready in <span className="text-fg tabular-nums">{formatCountdown(remaining)}</span>. Playback is paused
+            until the withdrawal completes.
           </p>
         )}
 
         {pending && remaining === 0 && (
-          <button
-            className="rounded-full bg-black px-4 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
-            disabled={busy !== null}
-            onClick={() => run("completing")}
-          >
+          <button className="btn-primary px-4 py-2" disabled={busy !== null} onClick={() => run("completing")}>
             {busy === "completing" ? "Completing withdrawal…" : "Complete withdrawal"}
           </button>
         )}
 
-        {message && <p className="text-sm text-green-700 dark:text-green-400">{message}</p>}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {message && <p>{message}</p>}
+        {error && <p className="text-muted">{error}</p>}
       </section>
 
-      <section className="space-y-2">
-        <p className="text-sm text-zinc-500">This month</p>
-        <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-          <div className="h-full rounded-full bg-black dark:bg-white" style={{ width: `${Math.min(100, percent)}%` }} />
-        </div>
-        <p className="text-sm">
-          {formatDollars(info.monthlySpent)} of {formatDollars(info.monthlyCap)}
-          {capReached && " · You’ve hit this month’s cap — the rest of the month is free."}
-        </p>
-      </section>
-
-      <section className="space-y-2">
-        <p className="text-sm text-zinc-500">Past viewings</p>
-        {viewings && viewings.length === 0 && <p className="text-sm">Nothing watched yet.</p>}
-        <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {viewings?.map((v) => (
-            <li key={v.sessionId} className="flex items-center justify-between gap-4 py-3 text-sm">
-              <div>
-                <p className="font-medium">{getVideo(v.videoId)?.title ?? "Video"}</p>
-                <p className="text-zinc-500">
-                  {new Date(v.startedAt).toLocaleDateString()} · {formatWatched(v.watchedSeconds)}
-                </p>
-              </div>
-              <div className="text-right">
-                {v.status === "settled" || v.status === "closed" ? (
-                  <p>{formatDollars(v.charged ?? 0n)}</p>
-                ) : (
-                  <p className="text-zinc-500">Pending</p>
-                )}
-                {v.link && (
-                  <a href={v.link} target="_blank" rel="noreferrer" className="text-xs underline">
-                    View receipt
-                  </a>
-                )}
-              </div>
-            </li>
-          ))}
+      <section className="panel space-y-2 p-6">
+        <h2 className="section-title">Viewing history</h2>
+        {viewings && viewings.length === 0 && <p className="text-faint">Nothing watched yet.</p>}
+        <ul className="divide-y divide-line">
+          {viewings?.map((v) => {
+            const video = getVideo(v.videoId);
+            return (
+              <li key={v.sessionId} className="flex items-center gap-4 py-3">
+                <div
+                  className="h-10 w-[72px] shrink-0 rounded-md bg-raised bg-cover bg-center"
+                  style={video ? { backgroundImage: `url(${video.thumbnail})` } : undefined}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{video?.title ?? "Video"}</p>
+                  <p className="text-xs text-muted tabular-nums">
+                    {new Date(v.startedAt).toLocaleDateString()} · {formatWatched(v.watchedSeconds)}
+                  </p>
+                </div>
+                <div className="space-y-0.5 text-right">
+                  {v.status === "settled" || v.status === "closed" ? (
+                    <p className="tabular-nums">{formatDollars(v.charged ?? 0n)}</p>
+                  ) : (
+                    <p className="text-faint">Pending</p>
+                  )}
+                  {v.link && (
+                    <a
+                      href={v.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-muted underline underline-offset-4 hover:text-fg"
+                    >
+                      View receipt
+                    </a>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </div>

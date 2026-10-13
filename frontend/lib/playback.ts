@@ -84,3 +84,21 @@ export function formatWatched(seconds: number): string {
   const m = Math.floor(s / 60);
   return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
+
+// ---- Display helpers (not used for billing) ----
+
+/** The $7.99 monthly plan the savings line compares against. */
+export const MONTHLY_PLAN_PRICE = 7_990_000n;
+const CENT = 10_000n;
+const PRICE_PER_SECOND = PRICE_STEP / BigInt(STEP_SECONDS); // $0.001
+
+/** Most a full watch can cost: length × $0.001, rounded up to the cent, never above what's left of the cap. */
+export function fullFilmPrice(durationSeconds: number, capLeft?: bigint): bigint {
+  const raw = BigInt(Math.ceil(durationSeconds)) * PRICE_PER_SECOND;
+  const rounded = ((raw + CENT - 1n) / CENT) * CENT;
+  return capLeft !== undefined && capLeft < rounded ? capLeft : rounded;
+}
+
+export function savedVsPlan(paid: bigint): bigint {
+  return paid < MONTHLY_PLAN_PRICE ? MONTHLY_PLAN_PRICE - paid : 0n;
+}

@@ -2,11 +2,13 @@
 
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import type { Hex } from "viem";
 import { formatDollars, getAccount } from "@/lib/account";
 import {
   endSession,
   endSessionOnUnload,
+  fullFilmPrice,
   PRICE_STEP,
   sendHeartbeat,
   startSession,
@@ -47,6 +49,30 @@ export function Player({ video }: { video: Video }) {
   const [month, setMonth] = useState<{ spent: bigint; cap: bigint } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+
+  // Display only: the cost pill behaves like player controls. Hidden while the film plays,
+  // shown when paused or for 3 seconds after the pointer moves over the player.
+  const [paused, setPaused] = useState(true);
+  const [pointerActive, setPointerActive] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showControlsBriefly() {
+    setPointerActive(true);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setPointerActive(false), 3000);
+  }
+
+  function hideControls() {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    setPointerActive(false);
+  }
+
+  useEffect(
+    () => () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    },
+    [],
+  );
 
   const billedSoFar = () => earlierPaidRef.current + BigInt(stepsSentRef.current) * PRICE_STEP;
 
@@ -277,24 +303,30 @@ export function Player({ video }: { video: Video }) {
   const videoCost = thisVideo < capLeft ? thisVideo : capLeft;
   const monthTotal = spent + videoCost;
   const capReached = month !== null && monthTotal >= cap;
+  // After "Done" the month total already includes this video, so compare it directly.
+  const capReachedAfter = month !== null && month.spent >= month.cap;
+  const meterVisible = paused || pointerActive;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
-        <Link href="/library" className="text-sm text-zinc-500">
-          ← Library
+        <Link href="/library" className="inline-flex items-center gap-2 text-muted hover:text-fg">
+          <ArrowLeft size={18} strokeWidth={1.5} />
+          Library
         </Link>
         {phase === "watching" && (
-          <button
-            className="rounded-full bg-black px-4 py-1.5 text-sm text-white dark:bg-white dark:text-black"
-            onClick={() => void finish()}
-          >
+          <button className="btn-primary px-4 py-1.5" onClick={() => void finish()}>
             Done
           </button>
         )}
       </div>
 
-      <div className="relative overflow-hidden rounded-lg bg-black">
+      <div
+        className="relative overflow-hidden rounded-lg border border-line bg-black"
+        onPointerMove={showControlsBriefly}
+        onPointerDown={showControlsBriefly}
+        onPointerLeave={hideControls}
+      >
         <video
           ref={videoRef}
           src={video.src}
@@ -303,24 +335,65 @@ export function Player({ video }: { video: Video }) {
           playsInline
           preload="metadata"
           className="aspect-video w-full"
-          onPlay={handlePlay}
+          onPlay={() => {
+            setPaused(false);
+            handlePlay();
+          }}
+          onPause={() => setPaused(true)}
+          onEnded={() => setPaused(true)}
           onTimeUpdate={handleTimeUpdate}
           onSeeked={handleSeeked}
         />
+        {phase === "ready" && (
+          <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted">
+            Full film: up to{" "}
+            <span className="text-fg tabular-nums">
+              {formatDollars(fullFilmPrice(video.duration, month ? capLeft : undefined))}
+            </span>
+          </div>
+        )}
         {phase === "watching" && month && (
-          <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs text-white">
-            {formatDollars(videoCost)} this video · {formatDollars(monthTotal)} of {formatDollars(cap)} this month
+          <div
+            aria-hidden={!meterVisible}
+            className={`pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs tabular-nums transition-opacity duration-200 ${
+              meterVisible ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-money" />
+            <span className="text-money">{formatDollars(videoCost)} this video</span>
+            <span className="text-muted">
+              · {formatDollars(monthTotal)} of {formatDollars(cap)} this month
+            </span>
           </div>
         )}
       </div>
 
-      {notice && <p className="text-red-600">{notice}</p>}
-      {capReached && <p className="text-green-700 dark:text-green-400">You’ve hit this month’s cap — the rest of the month is free.</p>}
-      {phase === "ended" && (summary ? <SummaryLine summary={summary} /> : <p className="text-sm">Finishing up…</p>)}
+      {notice && <p className="panel px-4 py-3">{notice}</p>}
+      {capReached && phase !== "ended" && (
+        <p className="panel px-4 py-3 text-money">You’ve reached this month’s cap. Everything else this month is free.</p>
+      )}
+      {phase === "ended" && (
+        <div className="panel space-y-1 px-4 py-4">
+          <p className="label">Summary</p>
+          {summary ? (
+            <SummaryLine summary={summary} capReached={capReachedAfter} />
+          ) : (
+            <p className="text-muted">Finishing up…</p>
+          )}
+        </div>
+      )}
 
-      <div>
-        <h1 className="text-xl font-semibold">{video.title}</h1>
-        <p className="text-xs text-zinc-500">{video.credit}</p>
+      <div className="space-y-3">
+        <h1 className="page-title">{video.title}</h1>
+        <div className="flex flex-wrap gap-2">
+          {video.tags.map((tag) => (
+            <span key={tag} className="rounded-full border border-line px-2.5 py-0.5 text-xs text-muted">
+              {tag}
+            </span>
+          ))}
+        </div>
+        <p className="max-w-2xl leading-relaxed text-muted">{video.description}</p>
+        <p className="label text-faint">{video.credit}</p>
       </div>
     </div>
   );

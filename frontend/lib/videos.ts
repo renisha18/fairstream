@@ -6,7 +6,13 @@ export type Video = {
   /** Length in seconds. */
   duration: number;
   credit: string;
+  description: string;
+  tags: string[];
+  category: Category;
 };
+
+export type Category = "Animation" | "Sci-fi";
+export const categories: Category[] = ["Animation", "Sci-fi"];
 
 const CREDIT = "© Blender Foundation, CC BY";
 
@@ -18,6 +24,9 @@ export const videos: Video[] = [
     thumbnail: "/videos/big-buck-bunny.jpg",
     duration: 90,
     credit: CREDIT,
+    description: "A gentle giant rabbit's peaceful day in the meadow is ruined by three mischievous rodents, so he plans a comeback.",
+    tags: ["Animation", "Comedy"],
+    category: "Animation",
   },
   {
     id: "sintel",
@@ -26,6 +35,9 @@ export const videos: Video[] = [
     thumbnail: "/videos/sintel.jpg",
     duration: 90,
     credit: CREDIT,
+    description: "A lone girl crosses a frozen world in search of the baby dragon she once rescued.",
+    tags: ["Animation", "Fantasy"],
+    category: "Animation",
   },
   {
     id: "tears-of-steel",
@@ -34,6 +46,9 @@ export const videos: Video[] = [
     thumbnail: "/videos/tears-of-steel.jpg",
     duration: 90,
     credit: CREDIT,
+    description: "In a future Amsterdam, a group of scientists tries to save the world from rogue robots, and an old heartbreak.",
+    tags: ["Sci-fi", "Live action"],
+    category: "Sci-fi",
   },
 ];
 
